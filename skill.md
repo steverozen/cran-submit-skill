@@ -52,6 +52,31 @@ Run `git status`. If the tree is dirty with unrelated changes, ask the
 user whether to proceed or pause. Do **not** silently commit files
 that aren't part of the submission.
 
+**Confirm the GitHub workflow runs CRAN incoming-feasibility checks.**
+By default `r-lib/actions/check-r-package@v2` sets
+`_R_CHECK_CRAN_INCOMING_=false`, so even with `--as-cran` the CI
+matrix will **not** emit NOTEs about invalid file URIs, misspelled
+words, or other incoming-feasibility checks that CRAN's pretest
+catches. Open `.github/workflows/R-CMD-check.yaml` and ensure the
+top-level `env:` block contains:
+
+```yaml
+env:
+  _R_CHECK_CRAN_INCOMING_: true
+  _R_CHECK_CRAN_INCOMING_REMOTE_: true
+  _R_CHECK_CRAN_INCOMING_CHECK_FILE_URIS_: true
+  _R_CHECK_CRAN_INCOMING_USE_ASPELL_: true
+```
+
+The `_CHECK_FILE_URIS_` flag in particular defaults to FALSE and is what
+gates the "Possibly invalid file URIs" check that bit mSigPlot 2.0.36
+in its CRAN pretest.
+
+If those are missing, add them, commit, and push **before** the
+submission commit so the matrix run that gates the submission has
+parity with CRAN's pretest. Without this, §4's NOTE-grep will report
+green even when CRAN won't.
+
 ### 2. Run the driver script
 
 ```sh
@@ -71,12 +96,23 @@ Parse the **final line** of stdout — it is a JSON object with fields:
  "tarball":"/home/steve/github/cosmicsig_1.3.1.tar.gz",
  "manual":"/home/steve/github/cosmicsig_1.3.1.pdf",
  "errors":0,"warnings":0,"notes":0,
- "revdeps":0,"spell_hits":0,"url_hits":0}
+ "revdeps":0,"spell_hits":0,"url_hits":0,
+ "rdevel":"ran"}
 ```
 
 If `errors + warnings + notes > 0`, the script already exited non-zero;
 surface the last ~60 lines of the R check log and stop. Don't commit
 anything.
+
+The `rdevel` field reports the R-devel pass:
+- `"ran"` — R-devel was on `$PATH` and produced a clean check (good).
+- `"failed"` — R-devel emitted a NOTE/WARNING/ERROR; the script already
+  exited non-zero. The user must fix before continuing.
+- `"missing"` — `Rscript-devel` is not installed. The local check is
+  weaker than CRAN's pretest. Tell the user how to install it (the
+  driver prints the exact `apt install` + `ln -sf` lines on stderr) and
+  ask whether to proceed anyway. CRAN-blocking R-devel-only NOTEs (e.g.
+  invalid file URIs in README) will then only be caught at §4's CI scan.
 
 If `spell_hits > 0` or `url_hits > 0`, show the reported hits to the
 user. These are not auto-fatal but usually block CRAN acceptance —
@@ -94,7 +130,7 @@ git push origin <current-branch>
 
 The project's `R-CMD-check.yaml` will fire on the push.
 
-### 4. Wait for CI to go green
+### 4. Wait for CI to go green AND scan for NOTEs
 
 Get the run ID of the just-triggered matrix:
 
@@ -110,7 +146,52 @@ gh run watch <run-id> --exit-status
 ```
 
 On failure: surface the failing job's log (`gh run view <id> --log-failed`)
-and stop. On success: proceed.
+and stop.
+
+On success, **do not proceed yet** — `r-lib/actions/check-r-package@v2`
+defaults to `error-on: warning`, so NOTEs do **not** fail the matrix.
+A green ✓ can still hide a CRAN-blocking NOTE (e.g. R-devel's "Possibly
+invalid file URI" check, or "Possibly misspelled words"). Scan the log
+explicitly:
+
+```sh
+LOG=/tmp/cran-submit-ci-<run-id>.log
+gh run view <run-id> --log > "$LOG"
+grep -nE \
+  'Status: .*NOTE|^\* checking .*\.\.\. NOTE|Possibly misspelled|Possibly invalid file URI|Found the following \(possibly\) invalid' \
+  "$LOG"
+```
+
+(GH Actions logs expire, so this must run while the run is recent — it
+always is at this step.)
+
+If the grep returns matches, the matrix produced NOTEs even though it
+passed. The streamed log only shows the summary line ("Status: 1 NOTE /
+See ...00check.log for details") — the NOTE body lives in
+`00check.log`, which `r-lib/actions/check-r-package@v2` only uploads on
+failure. So you have two options to surface the body:
+
+1. **Print the per-job HTML URLs** for the user to click through:
+   ```sh
+   gh run view <run-id> --json jobs \
+     -q '.jobs[] | select(.conclusion=="success") | "\(.name): \(.url)"'
+   ```
+   Each job page shows the full `00check.log` inline.
+2. **Re-trigger the matrix with `upload-results: always`** (a one-line
+   workflow tweak — see pre-flight) so the next run uploads artifacts
+   that can be grepped locally:
+   ```sh
+   gh run download <run-id> -D /tmp/cran-ci-artifacts-<run-id>
+   grep -rnE \
+     'Possibly misspelled|Possibly invalid file URI|Found the following \(possibly\) invalid' \
+     /tmp/cran-ci-artifacts-<run-id>/
+   ```
+
+Then ask the user via `AskUserQuestion` whether to (a) abort and fix, or
+(b) document the NOTE(s) in `cran-comments.md` and submit anyway. **Do
+not auto-continue.**
+
+If the grep returns nothing, proceed to §5.
 
 ### 5. Fill in cran-comments.md
 
@@ -129,6 +210,13 @@ incoming-feasibility check enabled).
 If `spell_hits` / `url_hits` were non-zero and the user chose to
 submit anyway, mention them here explicitly so CRAN reviewers aren't
 surprised.
+
+If §4's CI-log scan surfaced any NOTEs the user chose to submit with,
+add a "## Notes seen on CI" subsection to `cran-comments.md`,
+quoting the matched lines verbatim and explaining why they're
+acceptable (or why they cannot be eliminated). CRAN reviewers will see
+the same NOTEs in their pretest, so acknowledging them up front avoids
+a back-and-forth.
 
 Commit and push with `[skip ci]` so the matrix doesn't re-run for a
 comments-only change:

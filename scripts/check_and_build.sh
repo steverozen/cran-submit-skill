@@ -12,6 +12,10 @@
 #                      incoming = TRUE,
 #                      remote = TRUE,
 #                      error_on = "note")
+#   4b. Same devtools::check() under R-devel if `Rscript-devel` is on
+#       $PATH. CRAN's pretest runs under R-devel and exposes checks that
+#       stable R does not (e.g. invalid file URIs in README). HARD FAIL
+#       on any NOTE/WARNING/ERROR. Skipped with a warning if missing.
 #   5. Reverse-dep detection. If any downstream packages exist on CRAN,
 #      runs revdepcheck::revdep_check(num_workers = 2).
 #   6. Builds source tarball via devtools::build().
@@ -21,7 +25,8 @@
 #
 #   {"pkg":"...","version":"...","tarball":"...","manual":"...",
 #    "errors":0,"warnings":0,"notes":0,
-#    "revdeps":N,"spell_hits":N,"url_hits":N}
+#    "revdeps":N,"spell_hits":N,"url_hits":N,
+#    "rdevel":"ran"|"missing"|"failed"}
 #
 # All other output (R logs, progress, spell-check table, url-check table)
 # goes to stderr. Exits non-zero on check failure or any internal error.
@@ -84,10 +89,12 @@ Rscript --no-init-file -e "
 " 1>&2
 URL_HITS=$(cat "$RESULTS_DIR/url_hits")
 
-# --- 4. devtools::check ----------------------------------------------------
+# --- 4. devtools::check (stable R) -----------------------------------------
 log "devtools::check(cran = TRUE, incoming = TRUE, remote = TRUE, error_on = 'note')"
 _R_CHECK_CRAN_INCOMING_=TRUE \
 _R_CHECK_CRAN_INCOMING_REMOTE_=TRUE \
+_R_CHECK_CRAN_INCOMING_CHECK_FILE_URIS_=TRUE \
+_R_CHECK_CRAN_INCOMING_USE_ASPELL_=TRUE \
 Rscript --no-init-file -e '
   devtools::check(
     cran     = TRUE,
@@ -96,6 +103,40 @@ Rscript --no-init-file -e '
     error_on = "note"
   )
 ' 1>&2
+
+# --- 4b. devtools::check (R-devel, optional) -------------------------------
+# CRAN runs --as-cran on R-devel. Stable R may not have R-devel-only checks
+# (e.g. invalid file URI in README). Run a second pass under R-devel if
+# available; skip cleanly if not installed.
+RDEVEL="ran"
+if command -v Rscript-devel >/dev/null 2>&1; then
+  log "devtools::check() under R-devel ($(R-devel --version 2>&1 | head -1))"
+  set +e
+  _R_CHECK_CRAN_INCOMING_=TRUE \
+  _R_CHECK_CRAN_INCOMING_REMOTE_=TRUE \
+  _R_CHECK_CRAN_INCOMING_CHECK_FILE_URIS_=TRUE \
+  _R_CHECK_CRAN_INCOMING_USE_ASPELL_=TRUE \
+  Rscript-devel --no-init-file -e '
+    devtools::check(
+      cran     = TRUE,
+      incoming = TRUE,
+      remote   = TRUE,
+      error_on = "note"
+    )
+  ' 1>&2
+  rdevel_rc=$?
+  set -e
+  if [ "$rdevel_rc" -ne 0 ]; then
+    RDEVEL="failed"
+    echo "check_and_build.sh: R-devel check failed (rc=$rdevel_rc)" >&2
+    exit "$rdevel_rc"
+  fi
+else
+  RDEVEL="missing"
+  log "R-devel (Rscript-devel) not on PATH; skipping R-devel check"
+  log "  Install with:  sudo apt install -y https://cdn.posit.co/r/ubuntu-2404/pkgs/r-devel_1_amd64.deb"
+  log "                 sudo ln -sf /opt/R/devel/bin/Rscript /usr/local/bin/Rscript-devel"
+fi
 
 # --- 5. reverse deps -------------------------------------------------------
 log "Reverse dependency detection"
@@ -131,5 +172,5 @@ MANUAL="$PARENT_DIR/${PKG}_${VER}.pdf"
 R CMD Rd2pdf --no-preview --force -o "$MANUAL" . 1>&2
 
 # --- 8. emit JSON ---------------------------------------------------------
-printf '{"pkg":"%s","version":"%s","tarball":"%s","manual":"%s","errors":0,"warnings":0,"notes":0,"revdeps":%s,"spell_hits":%s,"url_hits":%s}\n' \
-  "$PKG" "$VER" "$TARBALL" "$MANUAL" "$REVDEPS" "$SPELL_HITS" "$URL_HITS"
+printf '{"pkg":"%s","version":"%s","tarball":"%s","manual":"%s","errors":0,"warnings":0,"notes":0,"revdeps":%s,"spell_hits":%s,"url_hits":%s,"rdevel":"%s"}\n' \
+  "$PKG" "$VER" "$TARBALL" "$MANUAL" "$REVDEPS" "$SPELL_HITS" "$URL_HITS" "$RDEVEL"
