@@ -95,14 +95,27 @@ Parse the **final line** of stdout — it is a JSON object with fields:
 {"pkg":"cosmicsig","version":"1.3.1",
  "tarball":"/home/steve/github/cosmicsig_1.3.1.tar.gz",
  "manual":"/home/steve/github/cosmicsig_1.3.1.pdf",
- "errors":0,"warnings":0,"notes":0,
+ "errors":0,"warnings":0,
+ "notes_stable":1,"notes_devel":1,
  "revdeps":0,"spell_hits":0,"url_hits":0,
  "rdevel":"ran"}
 ```
 
-If `errors + warnings + notes > 0`, the script already exited non-zero;
-surface the last ~60 lines of the R check log and stop. Don't commit
-anything.
+If errors or warnings > 0, the script already exited non-zero; surface
+the last ~60 lines of the R check log and stop. Don't commit anything.
+
+`notes_stable` / `notes_devel` count the NOTEs reported by each check.
+Look at the actual NOTE text in the stderr log:
+
+- A single "New submission" NOTE on a first-ever release is expected
+  and unavoidable — proceed.
+- Misspelled-words NOTEs for domain-specific terms can be silenced by
+  adding the word to `.aspell/<pkg>.rds`; review whether each flagged
+  word is actually a typo.
+- Other NOTEs (invalid file URIs, license, package size, etc.) usually
+  block CRAN acceptance — fix and re-run.
+
+If you proceed with NOTEs, document them in `cran-comments.md` (see §5).
 
 The `rdevel` field reports the R-devel pass:
 - `"ran"` — R-devel was on `$PATH` and produced a clean check (good).
@@ -236,17 +249,24 @@ is in `.Rbuildignore` on any well-formed R package.)
 
 Print, verbatim:
 
-- **Submit (preferred):** From the package root in an R session run
-  `devtools::submit_cran()`. It rebuilds the tarball with manual into
-  `tempdir()`, prompts "Is your email address <maintainer>?" then
-  "Ready to submit \<pkg\> (\<ver\>) to CRAN?", uploads to CRAN's intake,
-  and writes `CRAN-SUBMISSION` (version + date + SHA) to the package
-  root on success. You will get instructions on additional steps needed.
-  These are reading an email with a URL that you must go to to confirm
-  the upload.
-- **Submit (backup):** If `devtools::submit_cran()` is unavailable or
-  chokes (proxy, TLS, devtools install issues), upload
-  `<tarball path>` manually at
+- **Submit (preferred, unattended):**
+  ```sh
+  Rscript ~/.claude/skills/cran-submit/scripts/submit_cran_unattended.R <pkg-dir>
+  ```
+  This wraps `devtools::submit_cran()` with `assignInNamespace("yesno",
+  function(...) FALSE, ns = "devtools")` to bypass all the
+  randomly-shuffled `yesno()` prompts (e.g. "Is your email address X?",
+  "Ready to submit ... to CRAN?", and any further confirmation
+  prompts). It rebuilds the tarball with manual into `tempdir()`,
+  uploads to CRAN's intake, writes `CRAN-SUBMISSION` (version + date +
+  SHA) to the package root on success, and prints a banner reminding
+  the maintainer to check email for CRAN's confirmation link.
+- **Submit (interactive):** From the package root in an R session run
+  `devtools::submit_cran()` and answer each prompt manually. (Each
+  call to `yesno()` shuffles its three "no" variants and the single
+  "yes" — read every option each time.)
+- **Submit (backup):** If both above fail (proxy, TLS, devtools
+  install issues), upload `<tarball path>` manually at
   https://cran.r-project.org/submit.html. Name and Email fields on
   the form must match `Authors@R` (`cre` role) in `DESCRIPTION`
   exactly.

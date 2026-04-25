@@ -8,14 +8,20 @@
 #   1. devtools::document()
 #   2. devtools::spell_check()             (non-fatal; reports hit count)
 #   3. urlchecker::url_check()             (non-fatal; reports hit count)
-#   4. devtools::check(cran = TRUE,        (HARD FAIL on any NOTE/WARNING/ERROR)
+#   4. devtools::check(cran = TRUE,        (HARD FAIL on WARNING/ERROR)
 #                      incoming = TRUE,
 #                      remote = TRUE,
-#                      error_on = "note")
+#                      error_on = "warning")
+#      With env vars _R_CHECK_CRAN_INCOMING_=TRUE,
+#      _R_CHECK_CRAN_INCOMING_REMOTE_=TRUE,
+#      _R_CHECK_CRAN_INCOMING_CHECK_FILE_URIS_=TRUE, and
+#      _R_CHECK_CRAN_INCOMING_USE_ASPELL_=TRUE — to match CRAN pretest.
+#      NOTEs are reported via the JSON status fields and surfaced
+#      verbatim in stderr; the orchestration (skill.md) decides whether
+#      they're acceptable.
 #   4b. Same devtools::check() under R-devel if `Rscript-devel` is on
-#       $PATH. CRAN's pretest runs under R-devel and exposes checks that
-#       stable R does not (e.g. invalid file URIs in README). HARD FAIL
-#       on any NOTE/WARNING/ERROR. Skipped with a warning if missing.
+#       $PATH. CRAN's pretest runs under R-devel. Skipped with a warning
+#       if missing.
 #   5. Reverse-dep detection. If any downstream packages exist on CRAN,
 #      runs revdepcheck::revdep_check(num_workers = 2).
 #   6. Builds source tarball via devtools::build().
@@ -24,7 +30,8 @@
 # On success, emits a single JSON line on stdout (last line of stdout):
 #
 #   {"pkg":"...","version":"...","tarball":"...","manual":"...",
-#    "errors":0,"warnings":0,"notes":0,
+#    "errors":0,"warnings":0,
+#    "notes_stable":N,"notes_devel":N,
 #    "revdeps":N,"spell_hits":N,"url_hits":N,
 #    "rdevel":"ran"|"missing"|"failed"}
 #
@@ -90,19 +97,25 @@ Rscript --no-init-file -e "
 URL_HITS=$(cat "$RESULTS_DIR/url_hits")
 
 # --- 4. devtools::check (stable R) -----------------------------------------
-log "devtools::check(cran = TRUE, incoming = TRUE, remote = TRUE, error_on = 'note')"
+# error_on = "warning": fail hard on ERRORs and WARNINGs, but let NOTEs
+# through. CRAN's "New submission" NOTE is unavoidable on a first release
+# of any package, and other NOTEs (misspelled words, invalid URIs, etc.)
+# are surfaced verbatim in the check output above for the user to triage.
+log "devtools::check(cran = TRUE, incoming = TRUE, remote = TRUE, error_on = 'warning')"
 _R_CHECK_CRAN_INCOMING_=TRUE \
 _R_CHECK_CRAN_INCOMING_REMOTE_=TRUE \
 _R_CHECK_CRAN_INCOMING_CHECK_FILE_URIS_=TRUE \
 _R_CHECK_CRAN_INCOMING_USE_ASPELL_=TRUE \
-Rscript --no-init-file -e '
-  devtools::check(
+Rscript --no-init-file -e "
+  res <- devtools::check(
     cran     = TRUE,
     incoming = TRUE,
     remote   = TRUE,
-    error_on = "note"
+    error_on = 'warning'
   )
-' 1>&2
+  writeLines(as.character(length(res\$notes)), '$RESULTS_DIR/notes_stable')
+" 1>&2
+NOTES_STABLE=$(cat "$RESULTS_DIR/notes_stable")
 
 # --- 4b. devtools::check (R-devel, optional) -------------------------------
 # CRAN runs --as-cran on R-devel. Stable R may not have R-devel-only checks
@@ -116,14 +129,15 @@ if command -v Rscript-devel >/dev/null 2>&1; then
   _R_CHECK_CRAN_INCOMING_REMOTE_=TRUE \
   _R_CHECK_CRAN_INCOMING_CHECK_FILE_URIS_=TRUE \
   _R_CHECK_CRAN_INCOMING_USE_ASPELL_=TRUE \
-  Rscript-devel --no-init-file -e '
-    devtools::check(
+  Rscript-devel --no-init-file -e "
+    res <- devtools::check(
       cran     = TRUE,
       incoming = TRUE,
       remote   = TRUE,
-      error_on = "note"
+      error_on = 'warning'
     )
-  ' 1>&2
+    writeLines(as.character(length(res\$notes)), '$RESULTS_DIR/notes_devel')
+  " 1>&2
   rdevel_rc=$?
   set -e
   if [ "$rdevel_rc" -ne 0 ]; then
@@ -131,8 +145,11 @@ if command -v Rscript-devel >/dev/null 2>&1; then
     echo "check_and_build.sh: R-devel check failed (rc=$rdevel_rc)" >&2
     exit "$rdevel_rc"
   fi
+  NOTES_DEVEL=$(cat "$RESULTS_DIR/notes_devel" 2>/dev/null || echo 0)
+  NOTES_DEVEL=${NOTES_DEVEL:-0}
 else
   RDEVEL="missing"
+  NOTES_DEVEL=0
   log "R-devel (Rscript-devel) not on PATH; skipping R-devel check"
   log "  Install with:  sudo apt install -y https://cdn.posit.co/r/ubuntu-2404/pkgs/r-devel_1_amd64.deb"
   log "                 sudo ln -sf /opt/R/devel/bin/Rscript /usr/local/bin/Rscript-devel"
@@ -172,5 +189,5 @@ MANUAL="$PARENT_DIR/${PKG}_${VER}.pdf"
 R CMD Rd2pdf --no-preview --force -o "$MANUAL" . 1>&2
 
 # --- 8. emit JSON ---------------------------------------------------------
-printf '{"pkg":"%s","version":"%s","tarball":"%s","manual":"%s","errors":0,"warnings":0,"notes":0,"revdeps":%s,"spell_hits":%s,"url_hits":%s,"rdevel":"%s"}\n' \
-  "$PKG" "$VER" "$TARBALL" "$MANUAL" "$REVDEPS" "$SPELL_HITS" "$URL_HITS" "$RDEVEL"
+printf '{"pkg":"%s","version":"%s","tarball":"%s","manual":"%s","errors":0,"warnings":0,"notes_stable":%s,"notes_devel":%s,"revdeps":%s,"spell_hits":%s,"url_hits":%s,"rdevel":"%s"}\n' \
+  "$PKG" "$VER" "$TARBALL" "$MANUAL" "$NOTES_STABLE" "$NOTES_DEVEL" "$REVDEPS" "$SPELL_HITS" "$URL_HITS" "$RDEVEL"
