@@ -151,9 +151,11 @@ Print, verbatim:
 - **Submit (preferred):** From the package root in an R session run
   `devtools::submit_cran()`. It rebuilds the tarball with manual into
   `tempdir()`, prompts "Is your email address <maintainer>?" then
-  "Ready to submit <pkg> (<ver>) to CRAN?", uploads to CRAN's intake,
+  "Ready to submit \<pkg\> (\<ver\>) to CRAN?", uploads to CRAN's intake,
   and writes `CRAN-SUBMISSION` (version + date + SHA) to the package
-  root on success.
+  root on success. You will get instructions on additional steps needed.
+  These are reading an email with a URL that you must go to to confirm
+  the upload.
 - **Submit (backup):** If `devtools::submit_cran()` is unavailable or
   chokes (proxy, TLS, devtools install issues), upload
   `<tarball path>` manually at
