@@ -245,30 +245,48 @@ git push origin <current-branch>
 (The tarball built in step 2 is unaffected by this edit — `cran-comments.md`
 is in `.Rbuildignore` on any well-formed R package.)
 
-### 6. Hand-off to the user
+### 6. Submit
 
-Print, verbatim:
+Use `AskUserQuestion` to ask: "Run `submit_cran_unattended.R` now to
+upload `<tarball>` to CRAN?" with options:
 
-- **Submit (preferred, unattended):**
-  ```sh
-  Rscript ~/.claude/skills/cran-submit/scripts/submit_cran_unattended.R <pkg-dir>
-  ```
-  This wraps `devtools::submit_cran()` with `assignInNamespace("yesno",
-  function(...) FALSE, ns = "devtools")` to bypass all the
-  randomly-shuffled `yesno()` prompts (e.g. "Is your email address X?",
-  "Ready to submit ... to CRAN?", and any further confirmation
-  prompts). It rebuilds the tarball with manual into `tempdir()`,
-  uploads to CRAN's intake, writes `CRAN-SUBMISSION` (version + date +
-  SHA) to the package root on success, and prints a banner reminding
-  the maintainer to check email for CRAN's confirmation link.
-- **Submit (interactive):** From the package root in an R session run
-  `devtools::submit_cran()` and answer each prompt manually. (Each
-  call to `yesno()` shuffles its three "no" variants and the single
-  "yes" — read every option each time.)
-- **Submit (backup):** If both above fail (proxy, TLS, devtools
-  install issues), upload `<tarball path>` manually at
-  https://cran.r-project.org/submit.html. Name and Email fields on
-  the form must match `Authors@R` (`cre` role) in `DESCRIPTION`
+1. **Yes, submit now** (recommended)
+2. **No, I'll submit manually**
+
+Submitting is low-risk: CRAN sends a confirmation email to the
+maintainer (`cre` role in `Authors@R`); the submission only proceeds
+if the maintainer clicks the link within 7 days. Nothing on CRAN
+changes before that click.
+
+If the user picks **Yes**, run:
+
+```sh
+Rscript ~/.claude/skills/cran-submit/scripts/submit_cran_unattended.R <pkg-dir>
+```
+
+This wraps `devtools::submit_cran()` with `assignInNamespace("yesno",
+function(...) FALSE, ns = "devtools")` to bypass all the
+randomly-shuffled `yesno()` prompts (e.g. "Is your email address X?",
+"Ready to submit ... to CRAN?", and any further confirmation
+prompts). It rebuilds the tarball with manual into `tempdir()`,
+uploads to CRAN's intake, writes `CRAN-SUBMISSION` (version + date +
+SHA) to the package root on success, and prints a banner reminding
+the maintainer to check email for the confirmation link.
+
+After the script returns, surface its banner to the user verbatim and
+remind them: **check the maintainer's inbox for the CRAN
+confirmation email and click the link within 7 days, or the
+submission is discarded.**
+
+If the user picks **No** (or the unattended script fails — proxy,
+TLS, devtools install issues), tell them they can either:
+
+- Run `devtools::submit_cran()` interactively from the package root
+  and answer each `yesno()` prompt manually. (Each call shuffles
+  three "no" variants and one "yes" — read every option each time.)
+- Or upload `<tarball path>` manually at
+  https://cran.r-project.org/submit.html. The Name and Email fields
+  on the form must match `Authors@R` (`cre` role) in `DESCRIPTION`
   exactly.
 - **Manual PDF:** `<manual path>` — keep locally for your records;
   CRAN will build its own.
