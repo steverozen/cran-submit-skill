@@ -148,8 +148,18 @@ is in `.Rbuildignore` on any well-formed R package.)
 
 Print, verbatim:
 
-- **Tarball:** `<tarball path>` — upload to
-  https://cran.r-project.org/submit.html
+- **Submit (preferred):** From the package root in an R session run
+  `devtools::submit_cran()`. It rebuilds the tarball with manual into
+  `tempdir()`, prompts "Is your email address <maintainer>?" then
+  "Ready to submit <pkg> (<ver>) to CRAN?", uploads to CRAN's intake,
+  and writes `CRAN-SUBMISSION` (version + date + SHA) to the package
+  root on success.
+- **Submit (backup):** If `devtools::submit_cran()` is unavailable or
+  chokes (proxy, TLS, devtools install issues), upload
+  `<tarball path>` manually at
+  https://cran.r-project.org/submit.html. Name and Email fields on
+  the form must match `Authors@R` (`cre` role) in `DESCRIPTION`
+  exactly.
 - **Manual PDF:** `<manual path>` — keep locally for your records;
   CRAN will build its own.
 - **CRAN will email the maintainer** (the `cre` role in `Authors@R`)
