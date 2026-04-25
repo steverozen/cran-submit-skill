@@ -321,6 +321,31 @@ bash .../check_and_build.sh /path/to/pkg 2>/dev/null | tail -1
 ## Assumptions
 
 - `R` and `Rscript` are on `$PATH`.
+- **R-devel is highly recommended** (but optional). CRAN's pretest
+  runs under R-devel and surfaces strictness checks stable R does
+  not. The driver auto-detects `Rscript-devel` on `$PATH` and runs a
+  second `devtools::check()` pass under it; if it's missing the
+  driver still works but emits `"rdevel":"missing"` and prints an
+  install hint. Posit publishes a daily R-devel deb for Ubuntu
+  noble (24.04) — install on Debian/Ubuntu/Zorin with:
+  ```sh
+  sudo apt install -y https://cdn.posit.co/r/ubuntu-2404/pkgs/r-devel_1_amd64.deb
+  sudo ln -sf /opt/R/devel/bin/R       /usr/local/bin/R-devel
+  sudo ln -sf /opt/R/devel/bin/Rscript /usr/local/bin/Rscript-devel
+  R-devel -e 'install.packages(c("devtools","urlchecker","desc","rcmdcheck"))'
+  ```
+  (`rig add devel` works on stock Ubuntu but not on Zorin OS, since
+  rig's r-hub-API resolver doesn't recognise the `zorin-N` distro
+  string and `rig add` has no `--platform` override. The deb above
+  is what `rig` would have downloaded, just installed by hand.)
+
+  **pixi/conda-forge cannot install R-devel.** conda-forge ships
+  numbered R releases (`r-base=4.5.x`, etc.) but no `r-devel`
+  channel; R-devel snapshots aren't built by conda-forge.
+  `mamba install -c conda-forge r-devel` will fail with
+  `PackagesNotFoundError`. If you're in a pixi project, install
+  R-devel system-wide via the deb above and call
+  `Rscript-devel` from outside the pixi shell.
 - `devtools`, `urlchecker`, `desc` are installed (`urlchecker` is
   optional — the script skips the URL check if it's missing).
 - `revdepcheck` is installed **if** the package has reverse
