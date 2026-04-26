@@ -68,13 +68,6 @@ object with the tarball and manual paths and the check counts.
 - Writing `NEWS.md` or the "Submission" section of `cran-comments.md` —
   the skill confirms they exist and reflect the current release, but
   the prose is yours.
-- Uploading to CRAN — you finish the submission yourself, either by
-  running `devtools::submit_cran()` from the package root (the
-  preferred path: it rebuilds the tarball with manual, prompts for
-  confirmation, uploads, and writes `CRAN-SUBMISSION` on success), or
-  by uploading the tarball manually at
-  <https://cran.r-project.org/submit.html>. Either way you click
-  through the confirmation email CRAN sends to the maintainer.
 - Merging to `master` or tagging the release — the skill reminds you
   to do both after CRAN acceptance.
 
