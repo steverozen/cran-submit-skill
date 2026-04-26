@@ -14,9 +14,9 @@ that prepares an R package for submission or resubmission to CRAN.
   `R-CMD-check` GitHub Actions workflow, waits for the matrix to pass.
 - Fills in the "R CMD check results" section of `cran-comments.md`
   with the actual CI outcome and commits it with `[skip ci]`.
-- Hands you the tarball path, a link to
-  <https://cran.r-project.org/submit.html>, and reminders about
-  tagging and merging back to `master` after CRAN acceptance.
+- Offers to submit the package to CRAN. If you accept the offer,
+  you will still need to confirm the submission in the email you
+  get from CRAN.
 
 ## Install
 
