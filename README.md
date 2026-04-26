@@ -65,9 +65,10 @@ object with the tarball and manual paths and the check counts.
 
 - Version bumps — you decide patch vs minor, edit `DESCRIPTION` yourself
   (or ask Claude to do it) before invoking the skill.
-- Writing `NEWS.md` or the "Submission" section of `cran-comments.md` —
-  the skill confirms they exist and reflect the current release, but
-  the prose is yours.
+- Take full ressponsibility for writing `NEWS.md` or
+  the "Submission" section of `cran-comments.md`, but
+  the skill confirms they exist and reflect the current release, and
+  enters draft news and comments.
 - Merging to `master` or tagging the release — the skill reminds you
   to do both after CRAN acceptance.
 
