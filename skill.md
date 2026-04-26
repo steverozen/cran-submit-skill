@@ -6,8 +6,8 @@ description: >
   url_check, reverse-dep check, builds the source tarball and the
   reference manual PDF, commits and pushes to trigger the project's
   R-CMD-check GitHub Actions workflow, waits for the matrix to pass,
-  fills in cran-comments.md with the real CI outcome, and hands the
-  user the tarball path plus submission instructions. Triggers on
+  fills in cran-comments.md with the real CI outcome, and offers
+  to call the script submit_cran_unattended(). Triggers on
   "submit to CRAN", "prepare CRAN submission", "CRAN resubmission",
   "R CMD check for CRAN", "build the CRAN tarball".
 user_invocable: true
