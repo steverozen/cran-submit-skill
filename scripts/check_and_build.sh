@@ -6,6 +6,8 @@
 #
 # Runs, in order:
 #   1. devtools::document()
+#   1b. lint_docs.R                        (HARD FAIL: \dontrun, single-quoted
+#                                           acronyms, malformed reference links)
 #   2. devtools::spell_check()             (non-fatal; reports hit count)
 #   3. urlchecker::url_check()             (non-fatal; reports hit count)
 #   4. devtools::check(cran = TRUE,        (HARD FAIL on WARNING/ERROR)
@@ -72,6 +74,10 @@ log "Package: $PKG $VER  (dir: $PKG_DIR)"
 # --- 1. document -----------------------------------------------------------
 log "devtools::document()"
 Rscript --no-init-file -e 'devtools::document()' 1>&2
+
+# --- 1b. lint_docs ---------------------------------------------------------
+log "lint_docs.R (CRAN policy: \\dontrun, single-quoted acronyms, reference links)"
+Rscript --no-init-file "$(dirname "$0")/lint_docs.R" --pkg-dir "$PKG_DIR" 1>&2
 
 # --- 2. spell_check --------------------------------------------------------
 log "devtools::spell_check()"

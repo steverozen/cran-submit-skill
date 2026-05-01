@@ -11,7 +11,7 @@ description: >
   "submit to CRAN", "prepare CRAN submission", "CRAN resubmission",
   "R CMD check for CRAN", "build the CRAN tarball".
 user_invocable: true
-version: 0.1.0
+version: 0.1.1
 ---
 
 # cran-submit
@@ -83,11 +83,14 @@ green even when CRAN won't.
 ~/.claude/skills/cran-submit/scripts/check_and_build.sh <pkg-dir>
 ```
 
-The script runs document, spell_check, url_check, `devtools::check(cran
-= TRUE, incoming = TRUE, remote = TRUE, error_on = "note")`, reverse-dep
-detection (with opt-in `revdep_check` if any downstream packages
-exist), builds the source tarball, and builds the reference manual
-PDF.
+The script runs **lint_docs.R** first (static CRAN policy checks that
+`devtools::check()` does not catch: `\dontrun{}` in examples, single-quoted
+acronyms in the Description field, and malformed reference links — hard fails
+on any hit), then document, spell_check, url_check,
+`devtools::check(cran = TRUE, incoming = TRUE, remote = TRUE,
+error_on = "note")`, reverse-dep detection (with opt-in `revdep_check`
+if any downstream packages exist), builds the source tarball, and builds
+the reference manual PDF.
 
 Parse the **final line** of stdout — it is a JSON object with fields:
 
