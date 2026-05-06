@@ -71,6 +71,39 @@ if [ -z "$PKG" ] || [ -z "$VER" ]; then
 fi
 log "Package: $PKG $VER  (dir: $PKG_DIR)"
 
+# --- 0b. ensure R-CMD-check GitHub workflow exists -------------------------
+# The skill's §4 step waits on a GitHub Actions matrix triggered by the
+# submission push. If the project doesn't yet have an R-CMD-check workflow,
+# scaffold one via usethis::use_github_action("check-standard"), then ensure
+# the env block enables CRAN incoming-feasibility checks (which
+# r-lib/actions/check-r-package@v2 disables by default).
+WORKFLOW="$PKG_DIR/.github/workflows/R-CMD-check.yaml"
+if [ ! -f "$WORKFLOW" ]; then
+  log "No R-CMD-check.yaml found; running usethis::use_github_action(\"check-standard\")"
+  Rscript --no-init-file -e "
+    usethis::with_project('$PKG_DIR',
+      usethis::use_github_action('check-standard'))
+  " 1>&2
+fi
+if [ -f "$WORKFLOW" ] && ! grep -q '_R_CHECK_CRAN_INCOMING_:' "$WORKFLOW"; then
+  log "Adding CRAN incoming-feasibility env vars to $WORKFLOW"
+  Rscript --no-init-file -e "
+    p <- '$WORKFLOW'
+    L <- readLines(p)
+    i <- grep('^    env:[[:space:]]*$', L)[1]
+    if (is.na(i)) stop('could not find top-level env: block in ', p)
+    add <- c(
+      '      _R_CHECK_CRAN_INCOMING_: true',
+      '      _R_CHECK_CRAN_INCOMING_REMOTE_: true',
+      '      _R_CHECK_CRAN_INCOMING_CHECK_FILE_URIS_: true',
+      '      _R_CHECK_CRAN_INCOMING_USE_ASPELL_: true'
+    )
+    j <- i
+    while (j + 1 <= length(L) && grepl('^      ', L[j + 1])) j <- j + 1
+    writeLines(c(L[seq_len(j)], add, L[(j + 1):length(L)]), p)
+  " 1>&2
+fi
+
 # --- 1. document -----------------------------------------------------------
 log "devtools::document()"
 Rscript --no-init-file -e 'devtools::document()' 1>&2

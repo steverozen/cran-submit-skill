@@ -77,6 +77,14 @@ submission commit so the matrix run that gates the submission has
 parity with CRAN's pretest. Without this, §4's NOTE-grep will report
 green even when CRAN won't.
 
+If the workflow file itself is missing (no
+`.github/workflows/R-CMD-check.yaml`), the driver script in §2 will
+scaffold one via `usethis::use_github_action("check-standard")` and
+inject the four `_R_CHECK_CRAN_INCOMING_*` env vars. Confirm the new
+file looks right (the `usethis` template covers macOS / Windows /
+Ubuntu × release / devel / oldrel-1) and stage it with the
+submission commit in §3.
+
 ### 2. Run the driver script
 
 ```sh
